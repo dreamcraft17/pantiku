@@ -1,0 +1,228 @@
+generator client {
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "linux-musl", "debian-openssl-1.1.x"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  ADMIN
+  ORPHANAGE_MANAGER
+  DONOR
+  VOLUNTEER
+}
+
+enum OrphanageVerificationStatus {
+  PENDING
+  VERIFIED
+  REJECTED
+}
+
+enum CampaignStatus {
+  DRAFT
+  ACTIVE
+  FUNDED
+  COMPLETED
+  CANCELLED
+}
+
+enum DonationStatus {
+  PENDING
+  PAID
+  FAILED
+  REFUNDED
+}
+
+enum ProductStatus {
+  DRAFT
+  ACTIVE
+  SOLD_OUT
+  ARCHIVED
+}
+
+enum OrderStatus {
+  PENDING
+  PAID
+  PROCESSING
+  SHIPPED
+  COMPLETED
+  CANCELLED
+}
+
+model User {
+  id         String      @id @default(uuid()) @db.Uuid
+  email      String      @unique
+  password   String
+  fullName   String
+  phone      String?
+  skills     String?
+  city       String?
+  role       UserRole
+  orphanages Orphanage[] @relation("ManagerOrphanages")
+  donations  Donation[]
+  orders     Order[]
+  refreshTokens RefreshToken[]
+  createdAt  DateTime    @default(now())
+  updatedAt  DateTime    @updatedAt
+
+  @@index([role])
+}
+
+model RefreshToken {
+  id           String   @id @default(uuid()) @db.Uuid
+  userId       String   @db.Uuid
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash    String
+  expiresAt    DateTime
+  revokedAt    DateTime?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+model Orphanage {
+  id            String         @id @default(uuid()) @db.Uuid
+  name          String
+  publicAlias   String
+  location      String
+  description   String
+  verified      Boolean        @default(false)
+  verificationStatus OrphanageVerificationStatus @default(PENDING)
+  address       String?
+  city          String?
+  province      String?
+  contactPhone  String?
+  estimatedChildrenCount Int?
+  managerId     String         @db.Uuid
+  manager       User           @relation("ManagerOrphanages", fields: [managerId], references: [id])
+  children      ChildProfile[]
+  campaigns     Campaign[]
+  products      Product[]
+  impactMetrics ImpactMetric[]
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+}
+
+model ChildProfile {
+  id           String    @id @default(uuid()) @db.Uuid
+  orphanageId  String    @db.Uuid
+  orphanage    Orphanage @relation(fields: [orphanageId], references: [id])
+  displayCode  String    @unique
+  nameHash     String?
+  age          Int
+  needsSummary String
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@index([orphanageId])
+}
+
+model Campaign {
+  id              String         @id @default(uuid()) @db.Uuid
+  orphanageId     String         @db.Uuid
+  orphanage       Orphanage      @relation(fields: [orphanageId], references: [id])
+  title           String
+  description     String
+  goalAmount      Decimal
+  collectedAmount Decimal        @default(0)
+  status          CampaignStatus @default(DRAFT)
+  isPublic        Boolean        @default(false)
+  isDemo          Boolean        @default(false)
+  donations       Donation[]
+  impactMetrics   ImpactMetric[]
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  @@index([orphanageId])
+  @@index([status])
+}
+
+model Donation {
+  id         String         @id @default(uuid()) @db.Uuid
+  campaignId String         @db.Uuid
+  campaign   Campaign       @relation(fields: [campaignId], references: [id])
+  userId     String         @db.Uuid
+  user       User           @relation(fields: [userId], references: [id])
+  amount     Decimal
+  status     DonationStatus @default(PENDING)
+  paymentRef String?
+  provider   String?
+  createdAt  DateTime       @default(now())
+  updatedAt  DateTime       @updatedAt
+
+  @@index([campaignId])
+  @@index([userId])
+}
+
+model Product {
+  id          String        @id @default(uuid()) @db.Uuid
+  orphanageId String        @db.Uuid
+  orphanage   Orphanage     @relation(fields: [orphanageId], references: [id])
+  name        String
+  description String
+  price       Decimal
+  stock       Int
+  status      ProductStatus @default(DRAFT)
+  isPublic    Boolean       @default(false)
+  isDemo      Boolean       @default(false)
+  orderItems  OrderItem[]
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  @@index([orphanageId])
+  @@index([status])
+}
+
+model Order {
+  id          String      @id @default(uuid()) @db.Uuid
+  userId      String      @db.Uuid
+  user        User        @relation(fields: [userId], references: [id])
+  totalAmount Decimal     @default(0)
+  status      OrderStatus @default(PENDING)
+  paymentRef  String?
+  provider    String?
+  items       OrderItem[]
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  @@index([userId])
+}
+
+model OrderItem {
+  id         String   @id @default(uuid()) @db.Uuid
+  orderId    String   @db.Uuid
+  order      Order    @relation(fields: [orderId], references: [id])
+  productId  String   @db.Uuid
+  product    Product  @relation(fields: [productId], references: [id])
+  quantity   Int
+  unitPrice  Decimal
+  totalPrice Decimal
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([orderId])
+  @@index([productId])
+}
+
+model ImpactMetric {
+  id             String    @id @default(uuid()) @db.Uuid
+  orphanageId    String    @db.Uuid
+  orphanage      Orphanage @relation(fields: [orphanageId], references: [id])
+  campaignId     String?   @db.Uuid
+  campaign       Campaign? @relation(fields: [campaignId], references: [id])
+  metricDate     DateTime
+  childrenServed Int       @default(0)
+  donationTotal  Decimal   @default(0)
+  productRevenue Decimal   @default(0)
+  notes          String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@index([orphanageId])
+  @@index([campaignId])
+}

@@ -1,0 +1,16 @@
+import { UserRole } from "@prisma/client";
+
+declare global {
+  namespace Express {
+    interface UserContext {
+      userId: string;
+      role: UserRole;
+    }
+
+    interface Request {
+      user?: UserContext;
+    }
+  }
+}
+
+export {};

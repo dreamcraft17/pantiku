@@ -1,0 +1,33 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: pantiku_postgres
+    environment:
+      POSTGRES_DB: pantiku_mvp
+      POSTGRES_USER: pantiku
+      POSTGRES_PASSWORD: pantiku_dev_password
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  api:
+    build:
+      context: ./services/api
+    container_name: pantiku_api
+    depends_on:
+      - postgres
+    ports:
+      - "4000:4000"
+    env_file:
+      - ./services/api/.env
+    environment:
+      DATABASE_URL: postgresql://pantiku:pantiku_dev_password@postgres:5432/pantiku_mvp?schema=public
+    volumes:
+      - ./services/api:/app
+      - api_node_modules:/app/node_modules
+    command: npm run dev
+
+volumes:
+  postgres_data:
+  api_node_modules:
