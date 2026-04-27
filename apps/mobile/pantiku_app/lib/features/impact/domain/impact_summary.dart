@@ -1,25 +1,21 @@
 class ImpactSummary {
   ImpactSummary({
+    required this.mode,
+    required this.isDemo,
     required this.totalChildrenSupported,
     required this.totalOrphanages,
     required this.totalCampaigns,
     required this.totalProductsSold,
     required this.totalDonationsAmount,
-    required this.growthTotalChildrenSupported,
-    required this.growthTotalOrphanages,
-    required this.growthTotalCampaigns,
-    required this.growthTotalProductsSold,
-    required this.growthTotalDonationsAmount,
+    this.message,
   });
 
+  final String mode;
+  final bool isDemo;
   final int totalChildrenSupported;
   final int totalOrphanages;
   final int totalCampaigns;
   final int totalProductsSold;
   final int totalDonationsAmount;
-  final int growthTotalChildrenSupported;
-  final int growthTotalOrphanages;
-  final int growthTotalCampaigns;
-  final int growthTotalProductsSold;
-  final int growthTotalDonationsAmount;
+  final String? message;
 }

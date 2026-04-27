@@ -59,13 +59,13 @@ class _ImpactSummaryScreenState extends ConsumerState<ImpactSummaryScreen> with 
           loading: () => ListView(
             physics: const AlwaysScrollableScrollPhysics(),
             padding: const EdgeInsets.all(16),
-            children: const [SizedBox(height: 220, child: LoadingState(label: 'Memuat ringkasan dampak...'))],
+            children: const [SizedBox(height: 220, child: LoadingState(label: 'Memuat data dampak...'))],
           ),
           error: (_, __) => ListView(
             padding: const EdgeInsets.all(16),
             children: [
               const EmptyState(
-                title: 'Dampak belum bisa ditampilkan',
+                title: 'Data dampak belum dapat dimuat.',
                 description: 'Terjadi kendala saat memuat data. Tarik ke bawah untuk mencoba lagi.',
               ),
               const SizedBox(height: 12),
@@ -87,8 +87,8 @@ class _ImpactSummaryScreenState extends ConsumerState<ImpactSummaryScreen> with 
                 padding: const EdgeInsets.all(16),
                 children: const [
                   EmptyState(
-                    title: 'Data dampak belum tersedia',
-                    description: 'Ketika dukungan masuk, dampak nyata akan tampil di sini.',
+                    title: 'Data dampak sedang disiapkan',
+                    description: 'Pantiku akan menampilkan data dampak setelah campaign, donasi, dan produk terverifikasi mulai berjalan.',
                   ),
                 ],
               );
@@ -107,6 +107,27 @@ class _ImpactSummaryScreenState extends ConsumerState<ImpactSummaryScreen> with 
                   'Anak Bertumbuh, Panti Berdaya',
                   style: TextStyle(fontSize: 14, color: Colors.black87),
                 ),
+                if (impact.isDemo) ...[
+                  const SizedBox(height: 8),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFFF3CD),
+                      border: Border.all(color: const Color(0xFFF4C27A)),
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                    child: const Text(
+                      'Mode Demo',
+                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Color(0xFF8A5A00)),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    impact.message ??
+                        'Angka yang ditampilkan adalah simulasi untuk kebutuhan demonstrasi dan belum mewakili data operasional sebenarnya.',
+                    style: const TextStyle(fontSize: 12, color: Color(0xFF8A5A00)),
+                  ),
+                ],
                 const SizedBox(height: 16),
                 ImpactStatCard(
                   label: 'Total Anak',
@@ -114,7 +135,7 @@ class _ImpactSummaryScreenState extends ConsumerState<ImpactSummaryScreen> with 
                   icon: Icons.child_care_outlined,
                 ),
                 ImpactStatCard(
-                  label: 'Total Panti',
+                  label: 'Panti Terverifikasi',
                   numericValue: impact.totalOrphanages,
                   icon: Icons.home_work_outlined,
                 ),
@@ -129,7 +150,7 @@ class _ImpactSummaryScreenState extends ConsumerState<ImpactSummaryScreen> with 
                   icon: Icons.shopping_bag_outlined,
                 ),
                 ImpactStatCard(
-                  label: 'Total Donasi',
+                  label: 'Total Dukungan',
                   numericValue: impact.totalDonationsAmount,
                   isCurrency: true,
                   icon: Icons.volunteer_activism_outlined,

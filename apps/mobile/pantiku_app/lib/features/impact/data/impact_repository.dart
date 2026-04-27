@@ -11,16 +11,14 @@ class MockImpactRepository implements ImpactRepository {
   @override
   Future<ImpactSummary> getSummary() async {
     return ImpactSummary(
-      totalChildrenSupported: 63,
-      totalOrphanages: 12,
-      totalCampaigns: 8,
-      totalProductsSold: 182,
-      totalDonationsAmount: 45450000,
-      growthTotalChildrenSupported: 8,
-      growthTotalOrphanages: 5,
-      growthTotalCampaigns: 11,
-      growthTotalProductsSold: 14,
-      growthTotalDonationsAmount: 17,
+      mode: 'demo',
+      isDemo: true,
+      totalChildrenSupported: 0,
+      totalOrphanages: 0,
+      totalCampaigns: 0,
+      totalProductsSold: 0,
+      totalDonationsAmount: 0,
+      message: 'Angka ini adalah simulasi untuk kebutuhan demonstrasi.',
     );
   }
 
@@ -61,18 +59,16 @@ class ApiImpactRepository implements ImpactRepository {
   Future<ImpactSummary> getSummary() async {
     try {
       final data = await _apiService.get('/impact/summary');
-      final growth = (data['growth'] as Map<String, dynamic>?) ?? const {};
+      final summary = (data['summary'] as Map<String, dynamic>?) ?? const {};
       return ImpactSummary(
-        totalChildrenSupported: (data['totalChildren'] as num?)?.toInt() ?? (data['total_children_supported'] as num?)?.toInt() ?? 0,
-        totalOrphanages: (data['totalOrphanages'] as num?)?.toInt() ?? (data['total_orphanages'] as num?)?.toInt() ?? 0,
-        totalCampaigns: (data['totalCampaigns'] as num?)?.toInt() ?? (data['total_campaigns'] as num?)?.toInt() ?? 0,
-        totalProductsSold: (data['totalProductsSold'] as num?)?.toInt() ?? (data['total_products_sold'] as num?)?.toInt() ?? 0,
-        totalDonationsAmount: (data['totalDonations'] as num?)?.toInt() ?? (data['total_donations_amount'] as num?)?.toInt() ?? 0,
-        growthTotalChildrenSupported: (growth['totalChildren'] as num?)?.toInt() ?? (growth['total_children_supported'] as num?)?.toInt() ?? 0,
-        growthTotalOrphanages: (growth['totalOrphanages'] as num?)?.toInt() ?? (growth['total_orphanages'] as num?)?.toInt() ?? 0,
-        growthTotalCampaigns: (growth['totalCampaigns'] as num?)?.toInt() ?? (growth['total_campaigns'] as num?)?.toInt() ?? 0,
-        growthTotalProductsSold: (growth['totalProductsSold'] as num?)?.toInt() ?? (growth['total_products_sold'] as num?)?.toInt() ?? 0,
-        growthTotalDonationsAmount: (growth['totalDonations'] as num?)?.toInt() ?? (growth['total_donations_amount'] as num?)?.toInt() ?? 0,
+        mode: (data['mode']?.toString() ?? 'real'),
+        isDemo: data['isDemo'] == true,
+        totalChildrenSupported: (summary['totalChildren'] as num?)?.toInt() ?? 0,
+        totalOrphanages: (summary['totalOrphanages'] as num?)?.toInt() ?? 0,
+        totalCampaigns: (summary['totalCampaigns'] as num?)?.toInt() ?? 0,
+        totalProductsSold: (summary['totalProductsSold'] as num?)?.toInt() ?? 0,
+        totalDonationsAmount: (summary['totalDonationsAmount'] as num?)?.toInt() ?? 0,
+        message: data['message']?.toString(),
       );
     } catch (_) {
       return _fallback.getSummary();

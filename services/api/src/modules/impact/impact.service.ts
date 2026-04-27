@@ -1,4 +1,6 @@
 import { prisma } from "../../config/db.js";
+import { OrphanageVerificationStatus, CampaignStatus, DonationStatus, OrderStatus } from "@prisma/client";
+import { env } from "../../config/env.js";
 import { cacheService } from "../../services/cache/cache.service.js";
 
 const IMPACT_CACHE_TTL_MS = 60_000;
@@ -31,33 +33,151 @@ export async function invalidateImpactCache() {
   await cacheService.delByPrefix("impact:");
 }
 
+type ImpactSummaryValues = {
+  totalChildren: number;
+  totalOrphanages: number;
+  totalCampaigns: number;
+  totalProductsSold: number;
+  totalDonationsAmount: number;
+};
+
+type ImpactSummaryResponse = {
+  mode: "real" | "demo";
+  isDemo: boolean;
+  summary: ImpactSummaryValues;
+  message: string | null;
+};
+
+function hasRealImpactData(summary: ImpactSummaryValues) {
+  return (
+    summary.totalChildren > 0 ||
+    summary.totalOrphanages > 0 ||
+    summary.totalCampaigns > 0 ||
+    summary.totalProductsSold > 0 ||
+    summary.totalDonationsAmount > 0
+  );
+}
+
+async function getRealImpactSummary(): Promise<ImpactSummaryValues> {
+  const [children, orphanages, campaigns, paidOrders, paidDonations] = await Promise.all([
+    prisma.childProfile.count(),
+    prisma.orphanage.count({
+      where: { verificationStatus: OrphanageVerificationStatus.VERIFIED },
+    }),
+    prisma.campaign.count({
+      where: {
+        isDemo: false,
+        status: { in: [CampaignStatus.ACTIVE, CampaignStatus.FUNDED, CampaignStatus.COMPLETED] },
+      },
+    }),
+    prisma.orderItem.aggregate({
+      _sum: { quantity: true },
+      where: {
+        order: { status: { in: [OrderStatus.PAID, OrderStatus.COMPLETED] } },
+        product: { isDemo: false },
+      },
+    }),
+    prisma.donation.aggregate({
+      _sum: { amount: true },
+      where: {
+        status: DonationStatus.PAID,
+        campaign: { isDemo: false },
+      },
+    }),
+  ]);
+
+  return {
+    totalChildren: children,
+    totalOrphanages: orphanages,
+    totalCampaigns: campaigns,
+    totalProductsSold: Number(paidOrders._sum.quantity ?? 0),
+    totalDonationsAmount: Number(paidDonations._sum.amount ?? 0),
+  };
+}
+
+async function getDemoImpactSummary(): Promise<ImpactSummaryResponse> {
+  const [demoCampaigns, demoProducts] = await Promise.all([
+    prisma.campaign.findMany({
+      where: { isDemo: true, status: { in: [CampaignStatus.ACTIVE, CampaignStatus.FUNDED, CampaignStatus.COMPLETED] } },
+      select: { id: true, orphanageId: true },
+    }),
+    prisma.product.findMany({
+      where: { isDemo: true },
+      select: { id: true, orphanageId: true },
+    }),
+  ]);
+
+  const demoCampaignIds = demoCampaigns.map((item) => item.id);
+  const demoProductIds = demoProducts.map((item) => item.id);
+  const demoOrphanageIds = Array.from(new Set([...demoCampaigns.map((item) => item.orphanageId), ...demoProducts.map((item) => item.orphanageId)]));
+
+  if (!demoCampaignIds.length && !demoProductIds.length) {
+    return {
+      mode: "demo",
+      isDemo: true,
+      summary: {
+        totalChildren: 0,
+        totalOrphanages: 0,
+        totalCampaigns: 0,
+        totalProductsSold: 0,
+        totalDonationsAmount: 0,
+      },
+      message: "Angka ini adalah simulasi untuk kebutuhan demonstrasi.",
+    };
+  }
+
+  const [children, paidOrders, paidDonations] = await Promise.all([
+    demoOrphanageIds.length ? prisma.childProfile.count({ where: { orphanageId: { in: demoOrphanageIds } } }) : 0,
+    demoProductIds.length
+      ? prisma.orderItem.aggregate({
+          _sum: { quantity: true },
+          where: {
+            productId: { in: demoProductIds },
+            order: { status: { in: [OrderStatus.PAID, OrderStatus.COMPLETED] } },
+          },
+        })
+      : { _sum: { quantity: 0 } },
+    demoCampaignIds.length
+      ? prisma.donation.aggregate({
+          _sum: { amount: true },
+          where: {
+            campaignId: { in: demoCampaignIds },
+            status: DonationStatus.PAID,
+          },
+        })
+      : { _sum: { amount: 0 } },
+  ]);
+
+  return {
+    mode: "demo",
+    isDemo: true,
+    summary: {
+      totalChildren: children,
+      totalOrphanages: demoOrphanageIds.length,
+      totalCampaigns: demoCampaignIds.length,
+      totalProductsSold: Number(paidOrders._sum.quantity ?? 0),
+      totalDonationsAmount: Number(paidDonations._sum.amount ?? 0),
+    },
+    message: "Angka ini adalah simulasi untuk kebutuhan demonstrasi.",
+  };
+}
+
 export const impactService = {
   async getImpactSummary() {
     const cacheKey = "impact:summary";
-    const cached = await cacheService.get<Record<string, number>>(cacheKey);
+    const cached = await cacheService.get<ImpactSummaryResponse>(cacheKey);
     if (cached) return cached;
 
-    const [donations, campaigns, children, orphanages, orders] = await Promise.all([
-      prisma.donation.aggregate({ _sum: { amount: true }, where: { status: "PAID" } }),
-      prisma.campaign.count(),
-      prisma.childProfile.count(),
-      prisma.orphanage.count(),
-      prisma.orderItem.aggregate({ _sum: { quantity: true }, where: { order: { status: "PAID" } } })
-    ]);
-
-    const result = {
-      totalChildren: children,
-      totalOrphanages: orphanages,
-      totalCampaigns: campaigns,
-      totalProductsSold: Number(orders._sum.quantity ?? 0),
-      totalDonations: Number(donations._sum.amount ?? 0),
-      // Backward-compatible keys for existing clients.
-      total_children_supported: children,
-      total_orphanages: orphanages,
-      total_campaigns: campaigns,
-      total_products_sold: Number(orders._sum.quantity ?? 0),
-      total_donations_amount: Number(donations._sum.amount ?? 0)
-    };
+    const realSummary = await getRealImpactSummary();
+    const result: ImpactSummaryResponse =
+      env.DEMO_MODE && !hasRealImpactData(realSummary)
+        ? await getDemoImpactSummary()
+        : {
+            mode: "real",
+            isDemo: false,
+            summary: realSummary,
+            message: null,
+          };
 
     await cacheService.set(cacheKey, result, IMPACT_CACHE_TTL_MS);
     return result;
