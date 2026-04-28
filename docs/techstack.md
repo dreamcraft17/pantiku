@@ -16,6 +16,7 @@ Dokumen ini merangkum teknologi utama yang dipakai dalam MVP Pantiku.
 - Framework: `Next.js` (App Router)
 - Language: `TypeScript`
 - UI: `React`, `Tailwind CSS`, `shadcn/ui`
+- OAuth UI: `Clerk` (`@clerk/nextjs`) untuk Google Sign-In di frontend
 - State & data:
   - `Zustand` (auth/global state)
   - `TanStack Query` (server state/query caching)
@@ -40,6 +41,7 @@ Dokumen ini merangkum teknologi utama yang dipakai dalam MVP Pantiku.
 - Database: `PostgreSQL`
 - Auth:
   - `JWT` (access + refresh token)
+  - hybrid auth bridge: Google identity dari Clerk/GIS tetap ditukar menjadi JWT internal Pantiku
   - `bcrypt` (password hashing)
 - Validation: `Zod`
 - Security & middleware: `cors`, role-based authorization (RBAC)
@@ -64,12 +66,13 @@ Dokumen ini merangkum teknologi utama yang dipakai dalam MVP Pantiku.
 - Web deployment: `Vercel`
 - API deployment: VPS/Server berbasis Node.js + PostgreSQL
 - Environment management:
-  - Web: `NEXT_PUBLIC_API_URL`, `NEXT_PUBLIC_DEMO_MODE`
-  - API: `DATABASE_URL`, `JWT_SECRET`, `JWT_REFRESH_SECRET`, `WEB_ORIGIN`, dll
+  - Web: `NEXT_PUBLIC_API_URL`, `NEXT_PUBLIC_DEMO_MODE`, `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`
+  - API: `DATABASE_URL`, `JWT_SECRET`, `JWT_REFRESH_SECRET`, `WEB_ORIGIN`, `GOOGLE_CLIENT_ID` (opsional), dll
 
 ## Prinsip Implementasi MVP
 
 - API response envelope konsisten: `{ success, data }`
+- Backend tetap jadi single source of truth untuk sesi auth (JWT), termasuk user role dan redirect logic.
 - Role-based experience untuk:
   - Donor
   - Pengelola Panti
