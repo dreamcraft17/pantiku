@@ -18,6 +18,11 @@ export const authController = {
     return successResponse(res, data, "Google login successful");
   },
 
+  async clerk(req: Request, res: Response) {
+    const data = await authService.clerk(req.body);
+    return successResponse(res, data, "Clerk login successful");
+  },
+
   async me(req: Request, res: Response) {
     const data = await authService.me(req.user!.userId);
     return successResponse(res, data, "Authenticated user");

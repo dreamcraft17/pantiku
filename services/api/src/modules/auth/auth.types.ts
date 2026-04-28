@@ -30,3 +30,9 @@ export type RefreshInput = {
 export type GoogleLoginInput = {
   idToken: string;
 };
+
+export type ClerkLoginInput = {
+  email: string;
+  name: string;
+  clerkId: string;
+};

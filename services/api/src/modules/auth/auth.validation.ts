@@ -54,3 +54,9 @@ export const refreshSchema = z.object({
 export const googleLoginSchema = z.object({
   idToken: z.string().min(16)
 });
+
+export const clerkLoginSchema = z.object({
+  email: z.string().email(),
+  name: z.string().min(2),
+  clerkId: z.string().min(3)
+});

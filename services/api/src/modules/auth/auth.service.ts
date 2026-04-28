@@ -5,7 +5,7 @@ import { prisma } from "../../config/db.js";
 import { env } from "../../config/env.js";
 import { ApiError } from "../../utils/api-error.js";
 import { signAccessToken, signRefreshToken, verifyRefreshToken } from "../../utils/jwt.js";
-import { GoogleLoginInput, LoginInput, RefreshInput, RegisterInput } from "./auth.types.js";
+import { ClerkLoginInput, GoogleLoginInput, LoginInput, RefreshInput, RegisterInput } from "./auth.types.js";
 
 const REFRESH_TOKEN_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 let googleClient: OAuth2Client | null = null;
@@ -182,6 +182,45 @@ export const authService = {
           password: null,
           role: UserRole.DONOR,
           googleId
+        }
+      });
+    });
+
+    const tokens = await issueTokenPair(user.id, user.role);
+    const authUser = await buildAuthUserPayload(user.id);
+    return {
+      ...tokens,
+      user: authUser
+    };
+  },
+
+  async clerk(input: ClerkLoginInput) {
+    const normalizedEmail = input.email.toLowerCase();
+    const normalizedName = input.name.trim();
+    const incomingClerkId = input.clerkId.trim();
+
+    const user = await prisma.$transaction(async (tx) => {
+      const existing = await tx.user.findUnique({ where: { email: normalizedEmail } });
+      if (existing) {
+        if (!existing.clerkId) {
+          return tx.user.update({
+            where: { id: existing.id },
+            data: { clerkId: incomingClerkId }
+          });
+        }
+        if (existing.clerkId !== incomingClerkId) {
+          throw new ApiError("Clerk account mismatch", 401, "CLERK_ACCOUNT_MISMATCH");
+        }
+        return existing;
+      }
+
+      return tx.user.create({
+        data: {
+          email: normalizedEmail,
+          fullName: normalizedName,
+          password: null,
+          role: UserRole.DONOR,
+          clerkId: incomingClerkId
         }
       });
     });
