@@ -1,11 +1,14 @@
 import bcrypt from "bcryptjs";
+import { OAuth2Client } from "google-auth-library";
 import { OrphanageVerificationStatus, UserRole } from "@prisma/client";
 import { prisma } from "../../config/db.js";
+import { env } from "../../config/env.js";
 import { ApiError } from "../../utils/api-error.js";
 import { signAccessToken, signRefreshToken, verifyRefreshToken } from "../../utils/jwt.js";
-import { LoginInput, RefreshInput, RegisterInput } from "./auth.types.js";
+import { GoogleLoginInput, LoginInput, RefreshInput, RegisterInput } from "./auth.types.js";
 
 const REFRESH_TOKEN_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+let googleClient: OAuth2Client | null = null;
 
 async function issueTokenPair(userId: string, role: UserRole) {
   const accessToken = signAccessToken(userId, role);
@@ -46,6 +49,16 @@ async function buildAuthUserPayload(userId: string) {
     role: user.role,
     orphanageVerificationStatus: user.orphanages[0]?.verificationStatus
   };
+}
+
+function getGoogleClient() {
+  if (!env.GOOGLE_CLIENT_ID) {
+    throw new ApiError("GOOGLE_CLIENT_ID is not configured", 500, "GOOGLE_LOGIN_NOT_CONFIGURED");
+  }
+  if (!googleClient) {
+    googleClient = new OAuth2Client(env.GOOGLE_CLIENT_ID);
+  }
+  return googleClient;
 }
 
 export const authService = {
@@ -113,9 +126,65 @@ export const authService = {
   async login(input: LoginInput) {
     const user = await prisma.user.findUnique({ where: { email: input.email } });
     if (!user) throw new ApiError("Invalid credentials", 401, "INVALID_CREDENTIALS");
+    if (!user.password) throw new ApiError("Use Google login for this account", 401, "PASSWORD_LOGIN_DISABLED");
 
     const valid = await bcrypt.compare(input.password, user.password);
     if (!valid) throw new ApiError("Invalid credentials", 401, "INVALID_CREDENTIALS");
+
+    const tokens = await issueTokenPair(user.id, user.role);
+    const authUser = await buildAuthUserPayload(user.id);
+    return {
+      ...tokens,
+      user: authUser
+    };
+  },
+
+  async google(input: GoogleLoginInput) {
+    const client = getGoogleClient();
+    let ticket;
+    try {
+      ticket = await client.verifyIdToken({
+        idToken: input.idToken,
+        audience: env.GOOGLE_CLIENT_ID
+      });
+    } catch {
+      throw new ApiError("Invalid Google token", 401, "INVALID_GOOGLE_TOKEN");
+    }
+    const payload = ticket.getPayload();
+    const email = payload?.email;
+    const fullName = payload?.name;
+    const googleId = payload?.sub;
+
+    if (!email || !fullName || !googleId) {
+      throw new ApiError("Invalid Google token payload", 401, "INVALID_GOOGLE_TOKEN");
+    }
+
+    const normalizedEmail = email.toLowerCase();
+    const user = await prisma.$transaction(async (tx) => {
+      const existing = await tx.user.findUnique({ where: { email: normalizedEmail } });
+      if (existing) {
+        if (!existing.googleId) {
+          return tx.user.update({
+            where: { id: existing.id },
+            data: { googleId }
+          });
+        }
+        if (existing.googleId !== googleId) {
+          throw new ApiError("Google account mismatch", 401, "GOOGLE_ACCOUNT_MISMATCH");
+        }
+        return existing;
+      }
+
+      return tx.user.create({
+        data: {
+          email: normalizedEmail,
+          fullName,
+          password: null,
+          role: UserRole.DONOR,
+          googleId
+        }
+      });
+    });
 
     const tokens = await issueTokenPair(user.id, user.role);
     const authUser = await buildAuthUserPayload(user.id);

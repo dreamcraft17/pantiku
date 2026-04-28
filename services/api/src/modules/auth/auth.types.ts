@@ -26,3 +26,7 @@ export type LoginInput = {
 export type RefreshInput = {
   refreshToken: string;
 };
+
+export type GoogleLoginInput = {
+  idToken: string;
+};
